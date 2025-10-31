@@ -1,4 +1,4 @@
-# 多媒体文件处理脚本
+﻿# 多媒体文件处理脚本
 
 # 设置窗口标题
 $host.UI.RawUI.WindowTitle = "视频批量修复工具"
@@ -12,16 +12,18 @@ $mediaExtensions = @(
 
 # 设置并确认参数：
 $Recurse = $false
-$modelPath = "D:\Program Files\lada\_internal\model_weights\"
-$modelName = "lada_mosaic_detection_model_v3.1_fast.pt"
+$autoShutdown = $false
+$MAX_CLIP_LENGTH = 280
+$modelPath = "D:\Programs\lada-v0.8.2\_internal\model_weights\"
+$modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $restorationModel = "basicvsrpp-v1.2"
 $detectionModel = $modelPath + $modelName
 $codec = "hevc_nvenc"
-$cf = 16
+$crf = 16
 
 # 处理输入参数
 $fileList = @()
-$inputPath = if ($args.Count -gt 0) { $args[0] } else {"D:\Videos\" }
+$inputPath = if ($args.Count -gt 0) { $args[0] } else {"D:\Video\restore\" }
 $isDir = $false 
 if (Test-Path $inputPath){  
     $inputPath = Get-Item $inputPath
@@ -70,11 +72,12 @@ while ( -not $confirmed ) {
     } else {
         Write-Host "  输入文件: $inputPath" -ForegroundColor Yellow
     }  
+    Write-Host "  任务完成后是否关机：$autoShutdown" -ForegroundColor Yellow
     Write-Host "" 
     Write-Host "  修复模型：$restorationModel" -ForegroundColor Yellow
     Write-Host "  检测模型：$modelName" -ForegroundColor Yellow
     Write-Host "  编码格式：$codec" -ForegroundColor Yellow
-    Write-Host "  cf值: $cf" -ForegroundColor Yellow
+    Write-Host "  crf值: $crf" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "参数确认？(y/n): " -ForegroundColor Yellow -NoNewline
     $isConfirm = Read-Host
@@ -98,18 +101,27 @@ while ( -not $confirmed ) {
         }
     }    
 
+    # 确认是否需要关机
+    Write-Host "设置任务完成后关机？(y/n): " -ForegroundColor Yellow -NoNewline
+    $isShutdown = Read-Host
+    if ($isShutdown -eq 'y' -or $isShutdown -eq 'Y') {
+        $autoShutdown = $true
+    } else {
+        $autoShutdown = $false
+    }
+
 
     # 设置模型路径
     Write-Host ""
     Write-Host "请选择检测模型：(1, 2, 或 3)" -ForegroundColor Yellow
-    Write-Host "  1. v3.1_fast(默认)" -ForegroundColor Yellow
-    Write-Host "  2. v3.1_accurate" -ForegroundColor Yellow
+    Write-Host "  1. v3.1_accurate(默认)" -ForegroundColor Yellow
+    Write-Host "  2. v3.1_fast" -ForegroundColor Yellow
     Write-Host "  3. v2" -ForegroundColor Yellow
     Write-Host "请选择(直接回车为默认): " -ForegroundColor Yellow -NoNewline
     $selectModel = Read-Host
     switch ($selectModel) {
-        1 { $modelName = "lada_mosaic_detection_model_v3.1_fast.pt" }
-        2 { $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt" }
+        1 { $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt" }
+        2 { $modelName = "lada_mosaic_detection_model_v3.1_fast.pt" }
         3 { $modelName = "lada_mosaic_detection_model_v2.pt" }
         default {
             Write-Host "使用了默认的检测模型：$modelName"
@@ -117,7 +129,7 @@ while ( -not $confirmed ) {
     }
     $detectionModel = $modelPath + $modelName
 
-    # 设置输出的编码格式以及质量参数cf值
+    # 设置输出的编码格式以及质量参数crf值
     Write-Host ""
     Write-Host "请选择编码格式：(1 或 2)" -ForegroundColor Yellow
     Write-Host "  1. hevc_nvenc(默认)" -ForegroundColor Yellow
@@ -130,9 +142,9 @@ while ( -not $confirmed ) {
         $codec = "hevc_nvenc"
     }
     Write-Host ""
-    Write-Host "请选择视频质量cf值 (默认16): " -ForegroundColor Yellow -NoNewline
+    Write-Host "请选择视频质量crf值 (默认16): " -ForegroundColor Yellow -NoNewline
     $inputCf = Read-Host
-    $cf = if ($inputCf -gt 0 -and $inputCf -lt 50) { $inputCf } else { 16 }
+    $crf = if ($inputCf -gt 0 -and $inputCf -lt 50) { $inputCf } else { 16 }
 }
 
 
@@ -189,23 +201,29 @@ foreach ($currentFile in $fileList) {
     Write-Host "  修复: $restorationModel"
     Write-Host "编码信息："
     Write-Host "  编码: $codec"
-    Write-Host "  cf值: $cf"
+    Write-Host "  crf值: $crf"
 
-   
+
     # 记录开始时间
     $startTime = Get-Date
 
     # 执行 LADA CLI 工具进行视频处理
+    # `-c:a copy` 表示 “复制原始音频编码数据”
+    # --max-clip-length MAX_CLIP_LENGTH
+    # 修复时模型每次最多处理的帧数。较高的值可增强时间稳定性，较低的值可减少显存占用
+    # 若设置过低，可能会出现画面闪烁。 (默认: 180)
     try{
         & lada-cli.exe `
         --input "$currentFile" `
         --output "$outputFile" `
         --mosaic-restoration-model "$restorationModel" `
         --mosaic-detection-model-path "$detectionModel" `
+        --max-clip-length "$MAX_CLIP_LENGTH" `
         --codec "$codec" `
-        --crf $cf `
+        --crf $crf `
         --device cuda:0 `
-        --moov-front
+        --custom-encoder-options "-c:a copy"
+
         # 检查执行是否成功
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[失败] 处理失败: $(Split-Path $currentFile -Leaf)" -ForegroundColor Red
@@ -271,7 +289,7 @@ Write-Host "  修复模型：$restorationModel"
 Write-Host "  检测模型：$modelName" 
 Write-Host "编码信息：" 
 Write-Host "  编码: $codec" 
-Write-Host "  cf值: $cf" 
+Write-Host "  crf值: $crf" 
 Write-Host ""
 Write-Host "文件统计：" 
 Write-Host "  总文件数: $fileCount 个"
@@ -286,6 +304,14 @@ if ($fileCount -gt 0) {
 Write-Host "========================" -ForegroundColor Yellow
 Write-Host ""
 
+if ($autoShutdown) {
+        Write-Host "系统将在20秒后关机...(按 Ctrl+C 可取消)" -ForegroundColor Red
+        Start-Sleep -Seconds 20
+        Stop-Computer -Force
+        # 或使用: shutdown /s /t 10 /f
+}
+
 # 暂停以便查看结果
 Pause
+
 exit
