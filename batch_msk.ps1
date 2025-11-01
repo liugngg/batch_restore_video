@@ -227,7 +227,9 @@ foreach ($currentFile in $fileList) {
     # 修复时模型每次最多处理的帧数。较高的值可增强时间稳定性，较低的值可减少显存占用
     # 若设置过低，可能会出现画面闪烁。 (默认: 180)
     try{
-        & lada-cli.exe @cli_params
+        
+        # PS2exe编译后，外部命令运行时产生的输出会被当做错误输出（2），后面加入2>&1，将错误输出重定向到标准输出
+        & lada-cli.exe @cli_params 2>&1     
 
         # $output = & lada-cli.exe @cli_params 2>&1 | Out-String
         # # 按原始格式处理输出（不触发错误标记）

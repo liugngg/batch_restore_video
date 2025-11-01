@@ -9,3 +9,9 @@
 
 ## 1.2. 使用方法：
 - 使用方法比较简单，略
+
+## 1.3. 编译成可执行文件
+  1. 首先需要安装PS2EXE：
+     `Install-Module -Name PS2EXE -Scope CurrentUser -Force`  
+  2. 将PS1脚本编译成EXE可执行文件：
+     `Invoke-PS2EXE -InputFile .\batch_msk.ps1  -OutputFile "batch_msk.exe"`
