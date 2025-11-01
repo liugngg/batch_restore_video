@@ -1,4 +1,4 @@
-﻿# 多媒体文件处理脚本
+# 多媒体文件处理脚本
 
 # 设置窗口标题
 $host.UI.RawUI.WindowTitle = "视频批量修复工具"
@@ -13,7 +13,7 @@ $mediaExtensions = @(
 # 设置并确认参数：
 $Recurse = $false
 $autoShutdown = $false
-$MAX_CLIP_LENGTH = 280
+$MAX_CLIP_LENGTH = 240
 $modelPath = "D:\Programs\lada-v0.8.2\_internal\model_weights\"
 $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $restorationModel = "basicvsrpp-v1.2"
@@ -25,8 +25,8 @@ $crf = 16
 $fileList = @()
 $inputPath = if ($args.Count -gt 0) { $args[0] } else {"D:\Video\restore\" }
 $isDir = $false 
-if (Test-Path $inputPath){  
-    $inputPath = Get-Item $inputPath
+if (Test-Path -LiteralPath $inputPath){  
+    $inputPath = Get-Item -LiteralPath $inputPath
     if ($inputPath.PSIsContainer) {$isDir = $true} 
 } else {
     Write-Host "路径不存在: $inputPath" -ForegroundColor Red
@@ -43,22 +43,22 @@ while ( -not $confirmed ) {
     if ($isDir) {
         if ($Recurse) {
             # 递归查找所有子文件夹中的多媒体文件
-            $mediaFiles = Get-ChildItem -Path $inputPath -File -Recurse | Where-Object {
+            $mediaFiles = Get-ChildItem -LiteralPath $inputPath -File -Recurse | Where-Object {
                 $mediaExtensions -contains $_.Extension.ToLower()
             }
         } else {
             # 只查找当前文件夹中的多媒体文件
-            $mediaFiles = Get-ChildItem -Path $inputPath -File | Where-Object {
+            $mediaFiles = Get-ChildItem -LiteralPath $inputPath -File | Where-Object {
                 $mediaExtensions -contains $_.Extension.ToLower()
             }
         }
         
-        $fileList += $mediaFiles
+        $fileList += $mediaFiles.FullName
     } else {
         # 如果是文件，直接添加到列表
         if ($mediaExtensions -contains $inputPath.Extension.ToLower()) {
             # Write-Host "输入参数为媒体文件: $($inputPath.FullName)" -ForegroundColor Yellow
-            $fileList += $inputPath
+            $fileList += $inputPath.FullName
         }
     }
 
@@ -79,12 +79,15 @@ while ( -not $confirmed ) {
     Write-Host "  编码格式：$codec" -ForegroundColor Yellow
     Write-Host "  crf值: $crf" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "参数确认？(y/n): " -ForegroundColor Yellow -NoNewline
+    Write-Host "参数确认？(y确认，e退出程序): " -ForegroundColor Yellow -NoNewline
     $isConfirm = Read-Host
     if ($isConfirm -eq 'y' -or $isConfirm -eq 'Y') {
         Write-Host "参数已确认！" -ForegroundColor Yellow
         $confirmed = $true
         break
+    } elseif ($isConfirm -eq 'e' -or $isConfirm -eq 'E') {
+        Write-Host "程序已退出！" -ForegroundColor Red
+        exit
     } else {
         Write-Host "参数未确认，开始重新设置参数" -ForegroundColor Red
         Write-Host ""
@@ -169,12 +172,14 @@ catch {
 
 Write-Host ""
 Write-Host "------开始批量处理媒体文件------"
+
+
 # 遍历所有输入文件
 foreach ($currentFile in $fileList) {
     $fileCount++
 
     # 检查文件是否存在
-    if (-not (Test-Path $currentFile)) {
+    if (-not (Test-Path -LiteralPath $currentFile)) {
         Write-Host "[错误] 文件不存在: $(Split-Path $currentFile -Leaf)" -ForegroundColor Red
         $failedCount++
         continue
@@ -188,9 +193,9 @@ foreach ($currentFile in $fileList) {
         continue
     }
 
-    # 构造输出文件路径
-    $outputFile = [System.IO.Path]::GetDirectoryName($currentFile) + "\" + 
-                  [System.IO.Path]::GetFileNameWithoutExtension($currentFile) + "_[修复].mp4"
+    # # 构造输出文件路径
+    # $outputFile = [System.IO.Path]::GetDirectoryName($currentFile) + "\" + 
+    #               [System.IO.Path]::GetFileNameWithoutExtension($currentFile) + "_[修复].mp4"
 
     # 显示当前处理的文件信息
     Write-Host ""
@@ -202,7 +207,16 @@ foreach ($currentFile in $fileList) {
     Write-Host "编码信息："
     Write-Host "  编码: $codec"
     Write-Host "  crf值: $crf"
-
+    # 填写 lada-cli 的参数：
+    $cli_params = @(
+        "--input", $currentFile,
+        "--device", "cuda:0",
+        "--mosaic-restoration-model", $restorationModel,
+        "--codec", $codec,
+        "--crf", $crf,
+        "--max-clip-length", $MAX_CLIP_LENGTH
+        "--custom-encoder-options", "-c:a copy"
+    )
 
     # 记录开始时间
     $startTime = Get-Date
@@ -213,17 +227,12 @@ foreach ($currentFile in $fileList) {
     # 修复时模型每次最多处理的帧数。较高的值可增强时间稳定性，较低的值可减少显存占用
     # 若设置过低，可能会出现画面闪烁。 (默认: 180)
     try{
-        & lada-cli.exe `
-        --input "$currentFile" `
-        --output "$outputFile" `
-        --mosaic-restoration-model "$restorationModel" `
-        --mosaic-detection-model-path "$detectionModel" `
-        --max-clip-length "$MAX_CLIP_LENGTH" `
-        --codec "$codec" `
-        --crf $crf `
-        --device cuda:0 `
-        --custom-encoder-options "-c:a copy"
+        & lada-cli.exe @cli_params
 
+        # $output = & lada-cli.exe @cli_params 2>&1 | Out-String
+        # # 按原始格式处理输出（不触发错误标记）
+        # Write-Host $output -ForegroundColor ($LASTEXITCODE -eq 0 ? "Green" : "Red")
+        
         # 检查执行是否成功
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[失败] 处理失败: $(Split-Path $currentFile -Leaf)" -ForegroundColor Red
