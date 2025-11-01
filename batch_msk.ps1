@@ -19,7 +19,7 @@ $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $restorationModel = "basicvsrpp-v1.2"
 $detectionModel = $modelPath + $modelName
 $codec = "hevc_nvenc"
-$crf = 16
+$crf = 18
 
 # 处理输入参数
 $fileList = @()
@@ -145,9 +145,9 @@ while ( -not $confirmed ) {
         $codec = "hevc_nvenc"
     }
     Write-Host ""
-    Write-Host "请选择视频质量crf值 (默认16): " -ForegroundColor Yellow -NoNewline
+    Write-Host "请选择视频质量crf值 (默认18): " -ForegroundColor Yellow -NoNewline
     $inputCf = Read-Host
-    $crf = if ($inputCf -gt 0 -and $inputCf -lt 50) { $inputCf } else { 16 }
+    $crf = if ($inputCf -gt 0 -and $inputCf -lt 50) { $inputCf } else { 18 }
 }
 
 
