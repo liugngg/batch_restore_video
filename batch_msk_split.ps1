@@ -38,6 +38,7 @@ $script:restorationModel = "basicvsrpp-v1.2"
 $script:detectionModel = $modelPath + $modelName
 $script:codec = "hevc_nvenc"
 $script:crfDefault = 16
+$script:qmax = 28
 $script:crf = $script:crfDefault
 
 # 任务完成后是否关机：
@@ -346,7 +347,7 @@ function Restore-Video {
     Write-Host ""
     Write-Host "正在处理: $(Split-Path $inputFile -Leaf)" -ForegroundColor Yellow
 
-    if ($outputFile -eq $null){
+    if (-not $outputFile) {
         # 获取输出文件名: 当前文件名 + "_修复后.mp4"
         $outname =  (Split-Path $inputFile  -LeafBase) + "_修复后.mp4"
         $outputFile = Join-Path (Split-Path $inputFile) $outname
@@ -354,15 +355,15 @@ function Restore-Video {
 
     # 填写 lada-cli 的参数：
     $cli_params = @(
-        "--input", "`"$inputFile`"",
-        "--output", "`"$outputFile`"",
+        "--input", "$inputFile",
+        "--output", "$outputFile",
         "--device", "cuda:0",
-        "--mosaic-restoration-model", "`"$script:restorationModel`"",
-        "--detection-model", "`"$script:detectionModel`"",
+        "--mosaic-restoration-model", "$script:restorationModel",
+        "--mosaic-detection-model-path", "$script:detectionModel",
         "--codec", $script:codec,
-        "--crf", $script:crf,
+        # "--crf", $script:crf,
         "--max-clip-length", $script:MAX_CLIP_LENGTH
-        # "--custom-encoder-options", "-c:a copy"
+        "--custom-encoder-options", "-cq $script:crf -qpmax $script:qmax"
     )
     # 记录开始时间
     $startTime = Get-Date
@@ -374,7 +375,11 @@ function Restore-Video {
     try{
         
         # PS2exe编译后，外部命令运行时产生的输出会被当做错误输出（2），后面加入2>&1，将错误输出重定向到标准输出
-        & lada-cli.exe @cli_params 2>&1 
+        $cmd_para = "lada-cli.exe "+ $cli_params -join " "
+        Write-Host "$cmd_para"
+        & lada-cli.exe @cli_params
+        # $r = & lada-cli.exe @cli_params
+        # $cmd_para
 
         # # 按原始格式处理输出（不触发错误标记）
         # Write-Host $output -ForegroundColor ($LASTEXITCODE -eq 0 ? "Green" : "Red")
@@ -456,11 +461,11 @@ function Split_Restore {
             Write-Host "  开始执行片段的修复命令: lada-cli"
             $result_code = Restore-Video -inputFile "$inputSegmentPath" -outputFile "$outputSegmentPath"
             
-            if ($result_code -and $result_code -ne 0) {
-                throw "处理片段 $($segment.Name) 失败。"
-            } else {
+            if ($result_code -and $result_code[-1] -eq 0) {
                 # 为节省空间，将已处理的视频片段删除
                 Remove-Item $inputSegmentPath -Force
+            } else {
+                throw "处理片段 $($segment.Name) 失败。"
             }
             
             Write-Host "  已生成: $outputSegmentPath" -ForegroundColor Green
@@ -480,6 +485,7 @@ function Split_Restore {
         }
         # 如果处理成功，则清理临时文件
         Remove-TemporaryFiles -TempDirectory $tempDir
+        return 0
     }
     catch {
         # 捕获任何函数中抛出的错误，保留已处理的视频片段：
@@ -560,11 +566,16 @@ foreach ($currentFile in $script:fileList) {
     Write-Host ""
     Write-Host "====== 文件 $fileCount/$($script:fileList.Count) ======"
     # $result = Restore-Video $currentFile
-    $result = Split_Restore $currentFile 3000
-    if ($result -and $result -ne 0) {
-        $failedCount++
+    if($script:isSplit) {
+        Split_Restore $currentFile $script:splitDuration
     } else {
+        Restore-Video $currentFile
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
         $processedCount++
+    } else {
+        $failedCount++
     }
 }
 
