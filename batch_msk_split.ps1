@@ -72,14 +72,14 @@ function Check-VideoFile {
 
     # 检查文件是否存在
     if (-not (Test-Path -LiteralPath $videoFile)) {
-        Write-Host "[错误] 文件不存在: $(Split-Path $videoFile -Leaf)" -ForegroundColor Red
+        Write-Host "[错误] 文件不存在:  $videoFile" -ForegroundColor Red
         return $false
     }
 
     # 使用 ffprobe 检查是否为有效的音视频文件
     $ffprobeResult = & ffprobe -v error -select_streams v:0 -show_entries format=format_name -of default=nw=1 $videoFile 2>$null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[错误] 无效的音视频文件: $(Split-Path $videoFile -Leaf)" -ForegroundColor Red
+        Write-Host "[错误] 无效的音视频文件: $videoFile" -ForegroundColor Red
         return $false
     }
     # 是有效的视频文件
@@ -345,18 +345,18 @@ function Restore-Video {
     )
     # 显示当前处理的文件信息
     Write-Host ""
-    Write-Host "正在处理: $(Split-Path $inputFile -Leaf)" -ForegroundColor Yellow
+    Write-Host "正在处理:  $inputFile" -ForegroundColor Yellow
 
-    if (-not $outputFile) {
-        # 获取输出文件名: 当前文件名 + "_修复后.mp4"
-        $outname =  (Split-Path $inputFile  -LeafBase) + "_修复后.mp4"
-        $outputFile = Join-Path (Split-Path $inputFile) $outname
-    }
+    # if (-not $outputFile) {
+    #     # 获取输出文件名: 当前文件名 + "_修复后.mp4"
+    #     $outname =  (Split-Path $inputFile  -LeafBase) + "_修复后.mp4"
+    #     $outputFile = Join-Path (Split-Path $inputFile) $outname
+    # }
 
     # 填写 lada-cli 的参数：
     $cli_params = @(
         "--input", "$inputFile",
-        "--output", "$outputFile",
+        # "--output", "$outputFile",
         "--device", "cuda:0",
         "--mosaic-restoration-model", "$script:restorationModel",
         "--mosaic-detection-model-path", "$script:detectionModel",
@@ -397,12 +397,12 @@ function Restore-Video {
             return 0
             
         } else {
-            Write-Host "[失败] 处理失败: $(Split-Path $inputFile -Leaf)" -ForegroundColor Red
+            Write-Host "[失败] 处理失败: $inputFile" -ForegroundColor Red
             if (Test-Path $outputFile) { Remove-Item $outputFile }
             return 1
         }
     } catch {
-        Write-Host "[失败] 处理失败: $(Split-Path $inputFile -Leaf)" -ForegroundColor Red
+        Write-Host "[失败] 处理失败: $inputFile" -ForegroundColor Red
         Write-Host "错误信息: $($_.Exception.Message)" -ForegroundColor Red
         if (Test-Path $outputFile) { Remove-Item $outputFile }
         return 1
@@ -417,7 +417,7 @@ function Split_Restore {
     )
     # 显示当前处理的文件信息
     Write-Host ""
-    Write-Host "正在拆分处理: $(Split-Path $VideoFile -Leaf)" -ForegroundColor Yellow
+    Write-Host "正在拆分处理: $VideoFile" -ForegroundColor Yellow
 
     # --- 变量初始化 ---
     $fileInfo = Get-Item $VideoFile
