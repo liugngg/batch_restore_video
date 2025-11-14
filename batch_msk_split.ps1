@@ -150,7 +150,7 @@ function Confirm-Parameters {
                 }
             }
             foreach ($mediaFile in $mediaFiles) { 
-                if (Check-VideoFile $mediaFile){
+                if (Check-VideoFile $mediaFile.FullName){
                     $script:fileList += $mediaFile.FullName
                 }
             }
