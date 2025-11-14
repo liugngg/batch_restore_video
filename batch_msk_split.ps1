@@ -1,5 +1,6 @@
 # 多媒体文件处理脚本
 
+
 #region Script Parameters
 param(
     [Parameter(Mandatory=$true, Position=0, HelpMessage="请输入要处理的视频文件的路径")]
@@ -16,6 +17,13 @@ param(
 $host.UI.RawUI.WindowTitle = "视频批量修复工具"
 # 设置全局前景色
 $Host.UI.RawUI.ForegroundColor = "Green"
+
+# # 设置环境编码：
+# chcp 65001  # 设置命令本身编码为 UTF8
+# # 设置控制台输出编码为 UTF-8
+# [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# # 设置控制台输入编码为 UTF-8
+# [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 
 # 文件相关参数：
@@ -37,7 +45,7 @@ $script:modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $script:restorationModel = "basicvsrpp-v1.2"
 $script:detectionModel = $modelPath + $modelName
 $script:codec = "hevc_nvenc"
-$script:crfDefault = 16
+$script:crfDefault = 17
 $script:qmax = 28
 $script:crf = $script:crfDefault
 
@@ -363,7 +371,7 @@ function Restore-Video {
         "--codec", $script:codec,
         # "--crf", $script:crf,
         "--max-clip-length", $script:MAX_CLIP_LENGTH
-        "--custom-encoder-options", "-cq $script:crf -qpmax $script:qmax"
+        "--custom-encoder-options", "-cq $script:crf"
     )
     # 记录开始时间
     $startTime = Get-Date
@@ -377,7 +385,7 @@ function Restore-Video {
         # PS2exe编译后，外部命令运行时产生的输出会被当做错误输出（2），后面加入2>&1，将错误输出重定向到标准输出
         $cmd_para = "lada-cli.exe "+ $cli_params -join " "
         Write-Host "$cmd_para"
-        & lada-cli.exe @cli_params
+        & lada-cli.exe @cli_params 2>&1
         # $r = & lada-cli.exe @cli_params
         # $cmd_para
 
