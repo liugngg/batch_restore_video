@@ -45,8 +45,8 @@ $script:modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $script:restorationModel = "basicvsrpp-v1.2"
 $script:detectionModel = $modelPath + $modelName
 $script:codec = "hevc_nvenc"
-$script:crfDefault = 17
-$script:qmax = 28
+$script:crfDefault = 18
+# $script:qmax = 28
 $script:crf = $script:crfDefault
 
 # 任务完成后是否关机：
@@ -187,6 +187,27 @@ function Confirm-Parameters {
             Write-Host ""
         }
 
+        # 设置输出的编码格式以及质量参数crf值
+        Write-Host ""
+        Write-Host "请选择视频质量crf值 (默认$script:crfDefault): " -ForegroundColor Yellow -NoNewline
+        $inputCf = Read-Host
+        $script:crf = if ($inputCf -gt 10 -and $inputCf -lt 30) { $inputCf } else { $script:crfDefault }
+
+        Write-Host ""
+        Write-Host "请选择编码格式：(1、2 或 3)" -ForegroundColor Yellow
+        Write-Host "  1. hevc_nvenc(默认)" -ForegroundColor Yellow
+        Write-Host "  2. h264_nvenc" -ForegroundColor Yellow
+        Write-Host "  3. av1_nvenc" -ForegroundColor Yellow
+        Write-Host "  其他值：结束配置" -ForegroundColor Yellow
+        Write-Host "请选择： " -ForegroundColor Yellow -NoNewline
+        $selectCodec = Read-Host
+        switch ($selectCodec) {
+            1 {$script:codec = "hevc_nvenc"}
+            2 {$script:codec = "h264_nvenc"}
+            3 {$script:codec = "av1_nvenc"}
+            Default {continue}
+        }
+        
         # 确认是否递归处理子文件夹
         if ($script:isDir) {
             Write-Host "包含子文件夹？(y/n): " -ForegroundColor Yellow -NoNewline
@@ -245,23 +266,6 @@ function Confirm-Parameters {
             }
         }
         $script:detectionModel = $script:modelPath + $modelName
-
-        # 设置输出的编码格式以及质量参数crf值
-        Write-Host ""
-        Write-Host "请选择编码格式：(1 或 2)" -ForegroundColor Yellow
-        Write-Host "  1. hevc_nvenc(默认)" -ForegroundColor Yellow
-        Write-Host "  2. h264_nvenc" -ForegroundColor Yellow
-        Write-Host "请选择(直接回车为默认)： " -ForegroundColor Yellow -NoNewline
-        $selectCodec = Read-Host
-        if ($selectCodec -eq 2) {
-            $script:codec = "h264_nvenc"
-        } else {
-            $script:codec = "hevc_nvenc"
-        }
-        Write-Host ""
-        Write-Host "请选择视频质量crf值 (默认$script:crfDefault): " -ForegroundColor Yellow -NoNewline
-        $inputCf = Read-Host
-        $script:crf = if ($inputCf -gt 10 -and $inputCf -lt 30) { $inputCf } else { $script:crfDefault }
     }
 }
 
