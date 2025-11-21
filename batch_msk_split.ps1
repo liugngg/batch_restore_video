@@ -29,7 +29,7 @@ $Host.UI.RawUI.ForegroundColor = "Green"
 # 文件相关参数：
 # 支持的多媒体文件扩展名
 $script:mediaExtensions = @(
-    ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v"
+    ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".mpeg", ".mpg", ".m4v"
 )
 $script:Recurse = $false
 $script:fileList = @()
@@ -43,9 +43,9 @@ $script:MAX_CLIP_LENGTH = 300
 $script:modelPath = "D:\Programs\lada-v0.8.2\_internal\model_weights\"
 $script:modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
 $script:restorationModel = "basicvsrpp-v1.2"
-$script:detectionModel = $modelPath + $modelName
+$script:detectionModel = $script:modelPath + $script:modelName
 $script:codec = "hevc_nvenc"
-$script:crfDefault = 18
+$script:crfDefault = 21
 # $script:qmax = 28
 $script:crf = $script:crfDefault
 
@@ -187,39 +187,47 @@ function Confirm-Parameters {
             Write-Host ""
         }
 
-        # 设置输出的编码格式以及质量参数crf值
-        Write-Host ""
-        Write-Host "请选择视频质量crf值 (默认$script:crfDefault): " -ForegroundColor Yellow -NoNewline
-        $inputCf = Read-Host
-        $script:crf = if ($inputCf -gt 10 -and $inputCf -lt 30) { $inputCf } else { $script:crfDefault }
-
         Write-Host ""
         Write-Host "请选择编码格式：(1、2 或 3)" -ForegroundColor Yellow
         Write-Host "  1. hevc_nvenc(默认)" -ForegroundColor Yellow
         Write-Host "  2. h264_nvenc" -ForegroundColor Yellow
         Write-Host "  3. av1_nvenc" -ForegroundColor Yellow
-        Write-Host "  其他值：结束配置" -ForegroundColor Yellow
         Write-Host "请选择： " -ForegroundColor Yellow -NoNewline
         $selectCodec = Read-Host
         switch ($selectCodec) {
-            1 {$script:codec = "hevc_nvenc"}
-            2 {$script:codec = "h264_nvenc"}
-            3 {$script:codec = "av1_nvenc"}
-            Default {continue}
+            1 {$script:codec = "hevc_nvenc";break}
+            2 {$script:codec = "h264_nvenc";break}
+            3 {$script:codec = "av1_nvenc";break}
+            Default {
+                $script:codec = "hevc_nvenc"
+                Write-Host "使用了默认的编码格式：$script:codec"
+            }
+        }
+
+        # 设置输出的编码格式以及质量参数crf值
+        Write-Host ""
+        Write-Host "请选择视频质量crf值 (默认$script:crfDefault): " -ForegroundColor Yellow -NoNewline
+        $inputCf = Read-Host
+        $script:crf = if ($inputCf -gt 10 -and $inputCf -lt 30) { $inputCf } else { 
+            $script:crfDefaul = $script:crfDefault
+            Write-Host "使用了默认的crf值: $script:crfDefault" 
         }
         
         # 确认是否递归处理子文件夹
+        Write-Host ""
         if ($script:isDir) {
-            Write-Host "包含子文件夹？(y/n): " -ForegroundColor Yellow -NoNewline
+            Write-Host "包含子目录？(y/n): " -ForegroundColor Yellow -NoNewline
             $isRecurse = Read-Host
             if ($isRecurse -eq 'y' -or $isRecurse -eq 'Y') {
                 $script:Recurse = $true
             } else {
                 $script:Recurse = $false
+                Write-Host "不处理子目录中的文件"
             }
         } 
         
         # 确认是否分段处理视频
+        Write-Host ""
         Write-Host "是否分段处理视频？(y/n): " -ForegroundColor Yellow -NoNewline
         $selectSplit = Read-Host
         if ($selectSplit -eq 'y' -or $selectSplit -eq 'Y') {
@@ -235,16 +243,18 @@ function Confirm-Parameters {
             $script:isSplit = $true
         } else {
             $script:isSplit = $false
+            Write-Host "不分段后处理视频"
         }
 
-
         # 确认是否需要关机
+        Write-Host ""
         Write-Host "设置任务完成后关机？(y/n): " -ForegroundColor Yellow -NoNewline
         $isShutdown = Read-Host
         if ($isShutdown -eq 'y' -or $isShutdown -eq 'Y') {
             $script:autoShutdown = $true
         } else {
             $script:autoShutdown = $false
+            Write-Host "未设置任务完成后关机"
         }
 
 
@@ -257,15 +267,20 @@ function Confirm-Parameters {
         Write-Host "请选择(直接回车为默认): " -ForegroundColor Yellow -NoNewline
         $selectModel = Read-Host
         switch ($selectModel) {
-            1 { $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt" }
-            2 { $modelName = "lada_mosaic_detection_model_v3.1_fast.pt" }
-            3 { $modelName = "lada_mosaic_detection_model_v2.pt" }
-            default {
-                $modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
-                Write-Host "使用了默认的检测模型：$modelName"
+            1 
+            { $script:modelName = "lada_mosaic_detection_model_v3.1_accurate.pt";break}
+            2 
+            { $script:modelName = "lada_mosaic_detection_model_v3.1_fast.pt";break}
+            3 
+            { $script:modelName = "lada_mosaic_detection_model_v2.pt";break}
+            default 
+            {
+                $script:modelName = "lada_mosaic_detection_model_v3.1_accurate.pt"
+                Write-Host "使用了默认的检测模型：$script:modelName"
+                Write-Host ""
             }
         }
-        $script:detectionModel = $script:modelPath + $modelName
+        $script:detectionModel = $script:modelPath + $script:modelName
     }
 }
 
@@ -375,7 +390,7 @@ function Restore-Video {
         "--codec", $script:codec,
         # "--crf", $script:crf,
         "--max-clip-length", $script:MAX_CLIP_LENGTH
-        "--custom-encoder-options", "-cq $script:crf"
+        "--custom-encoder-options", "-rc vbr_hq -cq $script:crf"
     )
     # 记录开始时间
     $startTime = Get-Date
